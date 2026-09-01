@@ -15,13 +15,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pipenv'
-          cache-dependency-path: starter/backend/Pipfile.lock
-      - name: Install pipenv & dependencies
+
+      - name: Cache Pipenv Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{ runner.os }}-pipenv-${{ hashFiles('starter/backend/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+
+      - name: Install Pipenv & Dependencies
         run: |
           cd starter/backend
-          python -m pip install pipenv
-          pipenv install
+          python -m pip install --upgrade pip
+          pip install pipenv
+          pipenv install --deploy
+
       - name: Run Linter
         run: |
           cd starter/backend
@@ -34,13 +43,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pipenv'
-          cache-dependency-path: starter/backend/Pipfile.lock
-      - name: Install pipenv & dependencies
+
+      - name: Cache Pipenv Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{ runner.os }}-pipenv-${{ hashFiles('starter/backend/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+
+      - name: Install Pipenv & Dependencies
         run: |
           cd starter/backend
-          python -m pip install pipenv
-          pipenv install
+          python -m pip install --upgrade pip
+          pip install pipenv
+          pipenv install --deploy
+
       - name: Run Tests
         run: |
           cd starter/backend
