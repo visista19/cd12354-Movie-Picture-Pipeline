@@ -20,16 +20,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('starter/backend/Pipfile.lock') }}
+          key: ${{ runner.os }}-pipenv-v2-${{ hashFiles('starter/backend/Pipfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pipenv-
+            ${{ runner.os }}-pipenv-v2-
 
       - name: Install Pipenv & Dependencies
         run: |
           cd starter/backend
           python -m pip install --upgrade pip
-          pip install pipenv
-          pipenv install --deploy
+          pip install pipenv flake8
+          pipenv install --dev
 
       - name: Run Linter
         run: |
@@ -48,16 +48,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('starter/backend/Pipfile.lock') }}
+          key: ${{ runner.os }}-pipenv-v2-${{ hashFiles('starter/backend/Pipfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pipenv-
+            ${{ runner.os }}-pipenv-v2-
 
       - name: Install Pipenv & Dependencies
         run: |
           cd starter/backend
           python -m pip install --upgrade pip
           pip install pipenv
-          pipenv install --deploy
+          pipenv install --dev
 
       - name: Run Tests
         run: |
