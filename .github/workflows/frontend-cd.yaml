@@ -68,9 +68,9 @@ jobs:
           ECR_REPOSITORY: mp-frontend
           IMAGE_TAG: latest
         run: |
-          docker build \
-            --build-arg REACT_APP_MOVIE_API_URL="http://a594264b4f4a44b7994182d6a887f575-829481107.us-east-1.elb.amazonaws.com" \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG starter/frontend
+          docker build --no-cache \
+          --build-arg REACT_APP_MOVIE_API_URL="http://a594264b4f4a44b7994182d6a887f575-829481107.us-east-1.elb.amazonaws.com" \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG starter/frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Deploy to EKS
