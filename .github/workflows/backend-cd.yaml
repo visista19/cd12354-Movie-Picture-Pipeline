@@ -5,77 +5,91 @@ on:
     branches:
       - main
     paths:
-      - 'starter/backend/**'
+      - "starter/backend/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: cluster
+  ECR_REPOSITORY: mp-backend
+
 jobs:
-  lint-and-test:
+  lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: starter/backend
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
+      - run: python -m pip install --upgrade pip && pip install pipenv && (pipenv install --dev --skip-lock || pip install flake8)
+      - run: pipenv run lint || flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          cd starter/backend
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install flake8 pytest flask flask-cors flask-sqlalchemy
-
-      - name: Run lint and tests
-        run: |
-          cd starter/backend
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-          pytest
-
-  build-and-deploy:
-    needs: lint-and-test
+  test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: starter/backend
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: python -m pip install --upgrade pip && pip install pipenv && (pipenv install --dev --skip-lock || pip install pytest flask flask-cors flask-sqlalchemy)
+      - run: pipenv run test || pytest
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{secrets.AWS_SESSION_TOKEN}}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & Push Backend Docker Image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: mp-backend
-          IMAGE_TAG: latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: starter/backend
+          push: true
+          tags: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Install kustomize
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG starter/backend/
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/kustomize
 
-      - name: Deploy to EKS & Verify
-        run: |
-          aws eks update-kubeconfig --name cluster --region us-east-1
+      - id: ecr
+        run: echo "registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com" >> "$GITHUB_OUTPUT"
 
-          # Clear stuck terminating pods from expired nodes
-          kubectl get pods | grep Terminating | awk '{print $1}' | xargs -r kubectl delete pod --force --grace-period=0 || true
+      - name: Update image
+        working-directory: starter/backend/k8s
+        run: kustomize edit set image backend=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-          # Apply manifests via Kustomize
-          kubectl apply -k starter/backend/k8s/
-
-          # Restart deployment and wait for rollout
-          kubectl rollout restart deployment/backend
-          kubectl rollout status deployment/backend --timeout=90s
-
-          echo "==================== POD STATUS ===================="
-          kubectl get pods -o wide
-          echo "==================== SERVICE URL ===================="
-          kubectl get svc backend
+      - name: Deploy
+        working-directory: starter/backend/k8s
+        run: kustomize build | kubectl apply -f -
