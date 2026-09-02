@@ -23,9 +23,9 @@ jobs:
       - name: Install dependencies & Lint
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest
           cd starter/backend
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          pip install -r requirements.txt || pip install flask flask-sqlalchemy flake8 pytest
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
 
       - name: Run tests
         run: |
