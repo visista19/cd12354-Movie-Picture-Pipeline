@@ -20,16 +20,17 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies & Lint
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           cd starter/backend
-          pip install -r requirements.txt || pip install flask flask-sqlalchemy flake8 pytest
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install flake8 pytest flask flask-cors flask-sqlalchemy
 
-      - name: Run tests
+      - name: Run lint and tests
         run: |
           cd starter/backend
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
           pytest
 
   build-and-deploy:
